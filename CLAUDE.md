@@ -1,191 +1,276 @@
-# CLAUDE.md — Quimibond M&A Pipeline
+# CLAUDE.md — Quimibond Capital PE Pipeline
 
-Este archivo orienta a Claude Code para trabajar este proyecto. Léelo completo antes de empezar cualquier tarea.
+Léelo completo antes de tocar código. Este archivo es la única referencia
+autoritativa para sesiones de Claude Code en este repo.
 
-## Contexto del proyecto
+---
 
-Este pipeline genera el universo de empresas textiles en México como inteligencia para la **tesis de consolidación industrial de Quimibond** (no tejidos automotriz, Toluca). El output final es un CSV maestro que se hace merge con la hoja "2. Universo" del workbook `Pipeline_MA_Textil_Mexico_Quimibond.xlsx`.
+## Contexto de negocio (NO opcional)
 
-**No es un proyecto de software de producción.** Es una herramienta operativa para Jose (director de admón y finanzas, Quimibond). La prioridad es: **datos limpios y accionables**, no abstracciones elegantes.
+**Quimibond Capital** es la holding que adquiere targets. **Quimibond**
+(Productora de No Tejidos Quimibond S.A. de C.V.) es la empresa operativa
+ancla en Toluca: tejido circular + tintorería + acabado para clientes
+Tier-1 automotrices (LEAR, SHAWMUT). Jose es director de admón y finanzas
+en Quimibond y arquitecto de la tesis.
+
+La tesis es un **roll-up clásico**: comprar empresas familiares textiles
+mexicanas a 4–6× EBITDA integrándolas alrededor de Quimibond como ancla
+operativa, vendiendo el consolidado a 8–9×. Aprovecha nearshoring + T-MEC +
+transición EVs + fragmentación del sector mexicano.
+
+**Output del pipeline:** un workbook Excel multi-hoja con clasificación
+PE de un universo de empresas textiles mexicanas. Input principal: export
+EMIS / ISI Markets (~700 empresas). Fuentes secundarias futuras:
+DENUE/INEGI, Statista, Capital IQ, CANAINTEX.
+
+**Esto NO es software de producción.** Es una herramienta operativa para
+que Jose tome decisiones de M&A. Prioridad: **datos correctos y trazables**,
+no abstracciones elegantes — pero **sí robustez de tipos, tests e
+invariantes**, porque las decisiones de millones se basan en este output.
+
+---
 
 ## Arquitectura
 
 ```
-quimibond_pipeline/
-├── CLAUDE.md                       # este archivo
-├── README.md                       # quickstart para humanos
-├── .env.example                    # template de variables de entorno
-├── .gitignore
-├── requirements.txt
-├── src/
-│   ├── __init__.py
-│   ├── config.py                   # constantes: NAICS, estados, HTS
-│   ├── denue_client.py             # cliente API INEGI/DENUE
-│   ├── denue_pipeline.py           # script principal DENUE
-│   ├── cleaning.py                 # deduplicación y normalización
-│   ├── enrichment.py               # cruce con hoja Universo existente
-│   └── workbook_writer.py          # escribe nuevas filas al .xlsx
-├── data/                            # raw + intermediate (gitignored)
-│   └── .gitkeep
-├── output/                          # CSVs finales y workbook actualizado
-│   └── .gitkeep
-└── docs/
-    ├── DENUE_API.md                # notas sobre la API
-    ├── NAICS_reference.md          # mapping NAICS → tesis
-    └── workflow.md                 # flujo end-to-end
+config/                          # editable, validado por pydantic
+  thresholds.yaml                # cortes de tamaño/edad/saturación
+  pe_playbook.yaml               # múltiplos, pesos, tasas de descuento
+  classifiers.yaml               # keywords subsector / proceso / cliente
+  families.yaml                  # apellidos textiles MX clásicos
+
+src/quimibond/
+  models.py                      # pydantic v2 frozen — RawCompany, Company, ...
+  config_loader.py               # carga + valida YAMLs
+  logging_setup.py               # structlog
+  cli.py                         # entry point click
+
+  ingestion/                     # SourceLoader implementations
+    base.py                      # protocolo SourceLoader
+    emis.py                      # EMIS xlsx
+    denue.py                     # DENUE INEGI (futuro)
+    statista.py                  # stub
+    capital_iq.py                # stub
+
+  enrichment/
+    normalizers.py               # parse_revenue, parse_employees, ...
+    shareholders.py              # detección familia, capital origin
+    subsector.py                 # clasificador subsector + priority
+    processes.py                 # detector procesos Quimibond
+    clients.py                   # tipo cliente B2B
+
+  pe_classification/
+    role.py                      # Platform/Bolt-on/Tuck-in/Strategic
+    fatigue.py                   # owner fatigue scoring
+    levers.py                    # tres palancas + score combinado
+    arbitrage.py                 # LBO simplificado, MOIC, IRR
+    saturation.py                # análisis por subsegmento
+
+  scoring/
+    composite.py                 # ranking final
+
+  output/
+    workbook.py                  # orquestador
+    styles.py                    # NamedStyles centralizadas
+    sheets/                      # una clase por hoja
+      base.py                    # SheetBuilder protocol
+      inicio.py
+      universo_raw.py
+      pipeline_pe.py
+      tres_palancas.py
+      multiple_arbitrage.py
+      owner_fatigue.py
+      saturation_check.py
+      vista_familiar.py
+      investment_memo.py
+      rubrica_pe.py
+      fuentes.py
+
+  validation/
+    invariants.py                # asserts de runtime ANTES de output
+
+  traceability/
+    lineage.py                   # CellLineage, openpyxl comments
+
+tests/
+  unit/                          # pytest unit
+  integration/                   # end-to-end con fixtures
+  fixtures/                      # emis_sample_50.xlsx, expected_outputs.json
+
+data/                            # gitignored
+  raw/                           # exports EMIS originales
+  interim/                       # parquet enriquecido / clasificado
+  processed/                     # workbook final
 ```
-
-## Stack técnico
-
-- **Python 3.11+**
-- `requests` para API DENUE
-- `pandas` para manipulación
-- `openpyxl` para escribir al workbook
-- `python-dotenv` para gestión de credenciales
-- `rapidfuzz` para deduplicación fuzzy de razones sociales
-
-## Convenciones específicas de Jose
-
-Jose tiene preferencias claras en este proyecto:
-
-1. **JSON-RPC sobre XML-RPC** (preferencia general suya, aplica si extiendes a Odoo)
-2. **Tasa de descuento 12%** y **tipo de cambio 20 MXN/USD** como defaults
-3. **Comentarios en español** en código orientado a operación; inglés en código de utilidad pura está bien
-4. **Lenguaje directo y claro** — sin rodeos en mensajes de log o documentación
-5. **Outputs profesionales** — los CSVs que vea Jose deben estar listos para abrir en Excel sin ajustes (encoding utf-8-sig, separador estándar)
-
-## Flujo end-to-end
-
-```
-1. Jose obtiene token INEGI       → guarda en .env
-2. python -m src.denue_pipeline   → descarga raw a data/raw/
-3. python -m src.cleaning         → genera data/clean/denue_clean.csv
-4. python -m src.enrichment       → merge con Universo del workbook
-                                   → output/targets_consolidado.csv
-5. python -m src.workbook_writer  → escribe nuevas filas al .xlsx
-                                   → output/Pipeline_MA_Textil_Mexico_Quimibond_v2.xlsx
-6. Jose abre el .xlsx, valida, hace scoring.
-```
-
-## NAICS objetivo (orden de prioridad)
-
-| NAICS | Descripción | Por qué importa |
-|-------|-------------|-----------------|
-| 3149 | Otros productos textiles excepto prendas — **incluye no tejidos** | **Core de Quimibond** |
-| 3133 | Acabado y telas recubiertas | Recubrimientos automotrices |
-| 3169 | Similar cuero / sucedáneos cuero | Interior automotriz |
-| 3132 | Fabricación de telas | Tapicería técnica |
-| 3131 | Hilado de fibras textiles | Upstream — solo si técnicos |
-| 3141 | Alfombras y blancos | Floor mats automotrices |
-
-**Excluir explícitamente:** 3151 (calcetería moda), 3152 (confección de prendas), 3159 (accesorios de vestir).
-
-## Estados objetivo (CVE_ENT INEGI)
-
-Prioritarios (clúster textil): 09 (CDMX), 13 (Hidalgo), 15 (EdoMex), 21 (Puebla), 29 (Tlaxcala)
-Secundarios (clúster automotriz): 19 (NL), 05 (Coahuila), 22 (Querétaro), 11 (Guanajuato), 14 (Jalisco)
-
-## Estratos de personal ocupado (DENUE)
-
-Códigos del campo `estrato`:
-- 1: 0 a 5 personas
-- 2: 6 a 10 personas
-- 3: 11 a 30 personas
-- 4: 31 a 50 personas
-- **5: 51 a 100 personas** ← incluir
-- **6: 101 a 250 personas** ← incluir
-- **7: 251 y más personas** ← incluir
-
-**Filtro mínimo:** estrato >= 5. Por debajo es taller, no plataforma de consolidación.
-
-## Estructura de columnas del CSV final
-
-El output `targets_consolidado.csv` debe tener **exactamente** estas columnas, en este orden, para hacer paste directo en la hoja "2. Universo" del workbook:
-
-```
-ID, Empresa, Subsector, Producto principal, Ubicación, Tamaño Est.,
-Empleados Est., Ingresos Est. (MXN mm), Cliente Auto?, Exporta?,
-Estructura, Fuente, Notas, Status,
-RFC, Teléfono, Email, Web, Latitud, Longitud, Fecha alta, NAICS,
-Vol Exp 24m kg, Valor Exp 24m USD, Top cliente, Concentración top1,
-Crecimiento 24m, Precio USD/kg, # países destino
-```
-
-Las últimas 8 columnas (Veritrade) quedan vacías hasta que Jose tenga acceso a esa fuente.
-
-## Reglas de mapping DENUE → workbook
-
-| Campo DENUE | Campo workbook | Transformación |
-|-------------|----------------|----------------|
-| `nombre` o `nom_estab` | Empresa | strip + title case |
-| `razon_social` | Notas | "Razón social: {valor}" si difiere de Empresa |
-| `clase_actividad` | Subsector | mapping NAICS → categoría tesis (ver config.py) |
-| `estrato` | Tamaño Est. | mapping 5→"Mediana", 6→"Mediana-Grande", 7→"Grande" |
-| `estrato` | Empleados Est. | mapping 5→75, 6→175, 7→500 (punto medio) |
-| dirección campos | Ubicación | "{municipio}, {entidad}" |
-| `fecha_alta` | Fecha alta | parse a YYYY-MM-DD |
-| (todos) | Fuente | "DENUE {YYYY-MM}" |
-| (todos) | Status | "Investigar" (default; el scoring real lo hace Jose) |
-
-## Reglas de deduplicación
-
-Una empresa real puede aparecer múltiples veces en DENUE (un establecimiento por planta). Para deduplicar:
-
-1. Agrupa por `razon_social` (si está) o por `nombre` normalizado.
-2. Si hay match fuzzy >= 90% en nombre → mismo grupo.
-3. Quédate con el establecimiento de **mayor estrato** (más empleados).
-4. Suma o concatena: si los establecimientos están en distintos municipios, deja "Plantas: Toluca, Lerma" en Ubicación.
-
-## Cómo validar la salida
-
-Antes de declarar éxito, el pipeline debe:
-
-- [ ] Total de empresas en CSV final entre 150 y 500. Si <100, los filtros están demasiado estrechos. Si >800, demasiado laxos.
-- [ ] 0 duplicados (mismo nombre normalizado).
-- [ ] 100% de empresas con NAICS válido en lista objetivo.
-- [ ] 100% de empresas con estrato >= 5.
-- [ ] Encoding UTF-8 con BOM (`utf-8-sig`) para que Excel mexicano lea acentos correctamente.
-
-## Anti-patrones a evitar
-
-❌ **No inventes datos.** Si DENUE no tiene un campo, déjalo vacío. Mejor `None` honesto que estimación falsa.
-
-❌ **No hagas scraping de sitios privados.** El workbook ya identifica empresas por nombre; el enriquecimiento web manual lo hace Jose o un asistente humano, no este pipeline.
-
-❌ **No uses APIs de pago sin confirmación explícita.** Veritrade, Capital IQ, etc. requieren autorización por sesión. DENUE/INEGI es gratis con token.
-
-❌ **No subas el workbook completo a logs o prints.** Es información estratégica de Quimibond.
-
-❌ **No commitees `.env`, `data/raw/`, ni el workbook.** Ya están en `.gitignore`.
-
-## Tareas que Claude Code puede hacer en este proyecto
-
-Cuando Jose abra Claude Code en este folder, las tareas naturales son:
-
-1. **Setup inicial:** crear `.env` desde template, verificar dependencias, validar token INEGI con un ping al endpoint.
-2. **Correr pipeline:** ejecutar el flujo completo end-to-end y reportar conteos de cada etapa.
-3. **Debugging:** si DENUE devuelve un error o estructura inesperada, ajustar `denue_client.py`.
-4. **Iterar filtros:** si el universo final tiene <100 o >800, ajustar parámetros en `config.py` y volver a correr.
-5. **Extender:** agregar nuevos estados, nuevos NAICS, o un nuevo paso de enriquecimiento (ej: cruzar contra socios CANAINTEX si se obtiene la lista).
-
-## Cuando estés en duda
-
-- **Sobre estructura de datos DENUE** → primero hacer una request de prueba con `denue_client.py` y ver el JSON real antes de codear el parser.
-- **Sobre lógica de negocio** → preguntar a Jose. No asumir.
-- **Sobre dependencias nuevas** → preferir librerías establecidas (pandas, openpyxl, requests). Evitar deps exóticas.
 
 ---
 
-## Estado del proyecto al inicio
+## Stack técnico (no negociable)
 
-Este proyecto se entrega con **scaffolding completo y código stub funcional** pero sin haber sido ejecutado contra el API real de DENUE. La primera corrida en Claude Code debe ser:
+- **Python 3.11+**, type hints estrictos, **mypy strict** sin warnings.
+- **Pydantic v2** con `frozen=True` para inmutabilidad.
+- **pyproject.toml** con hatchling (no `requirements.txt` suelto).
+- **pytest** + `pytest-cov` (objetivo 80% en `enrichment/`, `pe_classification/`, `scoring/`).
+- **structlog** estructurado — NO `print()`, NO `logging.basicConfig()` directo.
+- **click** para CLI.
+- **openpyxl** para workbook (LibreOffice recalc para fórmulas).
+- **rapidfuzz** para fuzzy matching de nombres.
+- Sin deps exóticas. Cualquier dep nueva requiere justificación.
 
-```bash
-# 1. Verificar que el token funciona
-python -m src.denue_client --test
+---
 
-# 2. Si funciona, correr el pipeline completo
-python -m src.denue_pipeline
+## Plan de fases
+
+| Fase | Estado | Qué entrega |
+|------|--------|-------------|
+| **F1** | ✅ Completada | Scaffolding, models, config YAMLs, CLI stub, tests + mypy strict pasando. |
+| **F2** | Pendiente | `ingestion/emis.py` + tests con fixture. Requiere export1 de EMIS pusheado. |
+| **F3** | Pendiente | `enrichment/*.py` (normalizers, shareholders, subsector, processes, clients). |
+| **F4** | Pendiente | `pe_classification/*.py` + `validation/invariants.py`. |
+| **F5** | Pendiente | `output/workbook.py` + las 11 hojas. |
+| **F6** | Pendiente | `traceability/lineage.py`, recalc helper, README/CLAUDE.md finales. |
+
+Cada fase pasa pytest + mypy strict antes de la siguiente. Commits atómicos
+por fase con prefijo `F<n>:` en el mensaje.
+
+---
+
+## Principios non-negotiable
+
+### 1. Configuración fuera del código
+Toda decisión de negocio (thresholds, múltiplos, keywords, familias) vive en
+`config/*.yaml`. Si te encuentras hardcodeando un número o un keyword en
+`.py`, **detente**: muévelo al YAML.
+
+### 2. Modelos pydantic estrictos y frozen
+- `frozen=True` en todos los modelos del dominio.
+- Campos opcionales con `| None`, no `Optional[...]`.
+- Validaciones de dominio dentro del modelo (`field_validator`, `model_validator`).
+- Si un YAML viola las invariantes pydantic, el pipeline NO arranca.
+
+### 3. Determinismo e idempotencia
+- Iteraciones siempre con orden explícito (`sorted()`, no order de dict).
+- IDs estables: usa `emis_id` como key primaria.
+- Sin random sin seed.
+- Funciones puras: `classify_role(company, config) -> PERole` sin side effects.
+- El workbook generado dos veces con el mismo input debe ser byte-idéntico
+  (excepto timestamps de metadata).
+
+### 4. Trazabilidad por celda (F6)
+Cada valor calculado en el workbook debe poder explicarse via
+`CellLineage(value, source, formula, inputs)`. Las celdas calculadas
+críticas llevan comment openpyxl con su lineage.
+
+### 5. Validación con invariantes (F4)
+Antes de generar el workbook, `validation/invariants.assert_invariants()`
+verifica:
+- No duplicados por `emis_id`.
+- Todos los `pe_role` válidos.
+- `scoring_weights` suman 1.0.
+- `lever_combined ∈ [0, 1]` para todas.
+- `PLATFORM_CANDIDATE` ⇒ `revenue_usd_mm >= platform_min`.
+- `lever_combined == mean(cost, revenue, arbitrage)` dentro de tolerancia (o
+  según fórmula explícita del playbook).
+
+Si una invariante falla → exit 1 con stack trace claro. Sin workbook.
+
+### 6. Testing real
+- TDD cuando sea posible: test antes que implementación.
+- Cada función pública con ≥3 tests (happy, edge, invalid).
+- Fixtures comunes en `tests/conftest.py`.
+- Sample EMIS reducido en `tests/fixtures/` (50 empresas representativas)
+  para integration tests rápidos.
+
+### 7. CLI clara
+Subcomandos en `cli.py`:
+```
+quimibond pipeline run         end-to-end
+quimibond enrich               solo enriquecer
+quimibond classify             solo clasificar
+quimibond workbook             solo workbook
+quimibond validate             solo invariantes
+quimibond inspect --emis-id X  detalle de una empresa
+quimibond config show          imprime config cargada
+quimibond config validate      valida YAMLs
 ```
 
-Si el endpoint de DENUE cambió (las APIs gubernamentales mexicanas mutan), el primer trabajo de Claude Code será ajustar `denue_client.py` con la estructura real del response.
+### 8. Logging estructurado
+```python
+import structlog
+log = structlog.get_logger()
+
+log.info("pipeline.start", emis_input=path, total_rows=700)
+log.info("classification.role_assigned",
+         company=name, role="PRIMARY_BOLT_ON", score=0.77)
+log.warning("missing_revenue", emis_id=id, action="set_unknown_fit")
+log.error("invariant_failed", invariant="weights_sum_to_one", actual=0.99)
+```
+
+---
+
+## Anti-patrones
+
+❌ NO uses `os.path` — usa `pathlib.Path`.
+❌ NO uses `print()` para debugging — usa structlog.
+❌ NO uses `requirements.txt` — usa `pyproject.toml`.
+❌ NO uses `assert` para validación de runtime — usa exceptions explícitas
+   (assert solo en tests).
+❌ NO hardcodees keywords en `.py` — todo en `config/classifiers.yaml`.
+❌ NO permitas que dos hojas accedan a la misma data por caminos distintos —
+   todo pasa por `PipelineData`.
+❌ NO uses `pd.read_excel` directo — encapsula en `EmisLoader`.
+❌ NO commits de archivos en `data/` — solo `tests/fixtures/`.
+❌ NO generes el workbook si las invariantes fallan.
+❌ NO mezcles lógica de negocio con presentación.
+❌ NO inventes datos. Si la fuente no tiene un campo, queda `None`.
+
+---
+
+## Convenciones específicas de Jose
+
+1. **JSON-RPC sobre XML-RPC** (preferencia general, aplica si extiendes a Odoo).
+2. **Tasa de descuento 12%** y **tipo de cambio 20 MXN/USD** como defaults
+   (en `config/pe_playbook.yaml`).
+3. **Comentarios en español** en lógica de negocio; inglés en utilidades puras
+   está bien.
+4. **Lenguaje directo y claro** — sin rodeos en logs ni docs.
+5. **Outputs profesionales** — el workbook que vea Jose o un LP debe estar
+   listo sin ajustes.
+
+---
+
+## Cómo añadir una fuente nueva
+
+1. Crear `src/quimibond/ingestion/<fuente>.py` que implemente `SourceLoader`.
+2. Sus `RawCompany.source` debe ser un identificador estable (ej. `"DENUE"`).
+3. Mappear los campos nativos al esquema de `RawCompany`. Lo que no exista
+   queda `None` — no inventar.
+4. Tests unitarios con un fixture de `tests/fixtures/<fuente>_sample.xlsx`
+   o `.json`.
+5. Agregar al CLI vía argumento `--source <fuente>` si aplica.
+6. Documentar la fuente en `docs/<FUENTE>.md` (limitaciones, rate limits,
+   campos disponibles).
+
+---
+
+## Cuando estés en duda
+
+- **Estructura de datos de una fuente nueva** → primero hacer query de
+  prueba y ver el JSON/xlsx real antes de codear el parser.
+- **Lógica de negocio** → preguntar a Jose. No asumir. No inventar
+  thresholds.
+- **Dependencias nuevas** → preferir librerías ya en `pyproject.toml`. Cualquier dep
+  nueva requiere justificación.
+
+---
+
+## Forma de reportar avance
+
+Bullets concisos:
+- Qué completaste.
+- Qué tests pasan (`pytest -k <pattern>`).
+- Qué decisiones tomaste y por qué.
+- Qué te falta o qué necesitas confirmar con Jose.
+
+No expliques el código línea por línea. Asume que Jose sabe Python y conoce
+la tesis. Solo confirma decisiones cuando haya ambigüedad real.

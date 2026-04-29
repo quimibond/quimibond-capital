@@ -2,16 +2,17 @@
 .env
 .env.local
 
-# Datos generados (CLAUDE.md: nunca commitear)
+# Datos generados (nunca commitear)
 data/raw/
-data/clean/
-output/*.xlsx
-output/*.csv
-!output/.gitkeep
-!data/.gitkeep
+data/interim/
+data/processed/
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+!data/processed/.gitkeep
 
 # Workbook estratégico de Quimibond (jamás)
-*Pipeline_MA_Textil_Mexico_Quimibond*.xlsx
+*Pipeline_MA*.xlsx
+*Quimibond_Capital*.xlsx
 
 # Python
 __pycache__/
@@ -19,7 +20,23 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+.eggs/
+build/
+dist/
+*.egg
+
+# Test / type-check artifacts
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# uv / pip
+.uv/
+uv.lock
 
 # Sistema
 .DS_Store
@@ -29,3 +46,4 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+*.swo

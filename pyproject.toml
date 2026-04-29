@@ -1,0 +1,117 @@
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "quimibond"
+version = "0.1.0"
+description = "Quimibond Capital — pipeline PE de consolidación textil México"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "Jose / Quimibond Capital" }]
+
+dependencies = [
+    "pydantic>=2.6,<3",
+    "pyyaml>=6.0",
+    "pandas>=2.1",
+    "openpyxl>=3.1",
+    "click>=8.1",
+    "structlog>=24.1",
+    "python-dotenv>=1.0",
+    "rapidfuzz>=3.5",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.1",
+    "mypy>=1.8",
+    "ruff>=0.4",
+    "types-pyyaml",
+    "types-requests",
+    "pandas-stubs",
+]
+
+[project.scripts]
+quimibond = "quimibond.cli:cli"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/quimibond"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/quimibond", "config", "README.md", "pyproject.toml"]
+
+# ---------------------------------------------------------------------------
+# Tooling
+# ---------------------------------------------------------------------------
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+]
+markers = [
+    "slow: marks tests as slow (deselect with -m 'not slow')",
+    "integration: end-to-end tests that touch filesystem",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["src/quimibond"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+fail_under = 0  # se sube en F3+ a 80
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+no_implicit_reexport = true
+strict_equality = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+files = ["src/quimibond"]
+
+[[tool.mypy.overrides]]
+module = ["rapidfuzz.*"]
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "RUF", # ruff
+]
+ignore = [
+    "E501",  # line length handled by formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011"]  # allow asserts in tests

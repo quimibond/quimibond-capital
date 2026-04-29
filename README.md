@@ -1,88 +1,66 @@
-# Quimibond M&A Pipeline — Textil México
+# Quimibond Capital — Pipeline PE
 
-Pipeline de inteligencia de targets para la tesis de consolidación industrial de Quimibond en el sector textil mexicano.
+Pipeline reproducible que genera el workbook de pipeline PE para Quimibond
+Capital, vehículo de consolidación industrial textil mexicano.
 
-## Qué hace
-
-1. Descarga el universo de empresas textiles formales de México vía DENUE (INEGI, gratis).
-2. Filtra por NAICS, estado y tamaño relevantes para la tesis.
-3. Limpia y deduplica.
-4. Genera CSV listo para mergearse con la hoja "2. Universo" del workbook `Pipeline_MA_Textil_Mexico_Quimibond.xlsx`.
-
-## Setup (5 minutos)
-
-### 1. Obtén tu token INEGI
-
-Ve a https://www.inegi.org.mx/servicios/api_denue.html y solicita un token gratuito (lo recibes por correo en minutos).
-
-### 2. Clona y configura
+## Quickstart
 
 ```bash
-cd quimibond_pipeline
-python -m venv .venv
-source .venv/bin/activate  # Mac/Linux
-# o: .venv\Scripts\activate  # Windows
+git clone <repo>
+cd quimibond-capital
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
 
-pip install -r requirements.txt
+cp .env.example .env  # editar con INEGI_TOKEN si vas a usar fuente DENUE
 
-cp .env.example .env
-# Edita .env y pega tu INEGI_TOKEN
+quimibond config validate
+pytest
+mypy src/
 ```
 
-### 3. Verifica que el token funcione
+## Estado
 
-```bash
-python -m src.denue_client --test
-```
+Sistema en desarrollo iterativo por fases (F1 → F6). Ver `CLAUDE.md` para el
+plan completo y las decisiones de arquitectura.
 
-Output esperado: `✓ Token válido. Endpoint responde en X.X s.`
-
-### 4. Corre el pipeline completo
-
-```bash
-python -m src.denue_pipeline
-```
-
-Tarda ~5-15 min dependiendo de cuántos estados/NAICS escanees. Output en `output/targets_consolidado.csv`.
-
-### 5. Mergea con tu workbook
-
-Coloca tu workbook actual en `data/Pipeline_MA_Textil_Mexico_Quimibond.xlsx` y corre:
-
-```bash
-python -m src.workbook_writer
-```
-
-Genera `output/Pipeline_MA_Textil_Mexico_Quimibond_v2.xlsx` con las nuevas filas agregadas a la hoja "2. Universo".
+- **F1 (en este branch):** scaffolding, models pydantic, config YAMLs, CLI stub.
+- **F2:** ingestion EMIS.
+- **F3:** enrichment.
+- **F4:** clasificación PE + invariantes.
+- **F5:** workbook (11 hojas).
+- **F6:** trazabilidad por celda + CLAUDE.md final.
 
 ## Estructura
 
-Ver `CLAUDE.md` para la guía completa.
-
-## Comandos útiles
-
-```bash
-# Solo descargar (sin limpiar)
-python -m src.denue_pipeline --raw-only
-
-# Solo un estado
-python -m src.denue_pipeline --estados 15  # Solo EdoMex
-
-# Solo un NAICS
-python -m src.denue_pipeline --naics 3149  # Solo no tejidos
-
-# Modo verbose
-python -m src.denue_pipeline -v
+```
+config/                          # YAMLs editables (thresholds, playbook, classifiers, families)
+src/quimibond/
+  models.py                      # pydantic v2 frozen (RawCompany, Company, ...)
+  config_loader.py               # carga + valida YAMLs
+  cli.py                         # entry point click
+  ingestion/                     # EMIS, DENUE, ...
+  enrichment/                    # subsector, processes, shareholders, ...
+  pe_classification/             # role, fatigue, levers, arbitrage, saturation
+  scoring/
+  output/sheets/                 # una clase por hoja del workbook
+  validation/                    # invariantes pre-output
+  traceability/                  # cell lineage
+tests/
+  unit/                          # pytest unit
+  integration/                   # end-to-end con fixtures
+  fixtures/                      # sample EMIS data
+data/                            # gitignored: raw/, interim/, processed/
 ```
 
-## Troubleshooting
+## Comandos
 
-**"Token inválido" o 401:** Tu token expiró o fue mal copiado. Genera uno nuevo en INEGI.
-
-**Timeout:** DENUE puede ser lento. Sube el timeout en `config.py` (default: 30s).
-
-**CSV no abre bien en Excel:** El encoding default es `utf-8-sig` precisamente para Excel mexicano. Si lo abres con Numbers/LibreOffice y se ven mal los acentos, cambia `ENCODING` en `config.py`.
-
-## Soporte
-
-Este pipeline se mantiene con Claude Code. Si algo se rompe, abre el folder en Claude Code y describe el error — la guía en `CLAUDE.md` orienta a Claude para hacer el debug.
+```bash
+quimibond config show
+quimibond config validate
+quimibond pipeline run --input data/raw/emis_export.xlsx
+quimibond enrich --input data/raw/emis_export.xlsx --output data/interim/enriched.parquet
+quimibond classify --input data/interim/enriched.parquet --output data/interim/classified.parquet
+quimibond workbook --input data/interim/classified.parquet --output data/processed/
+quimibond validate --input data/interim/classified.parquet
+quimibond inspect --emis-id 8340045 --input data/interim/classified.parquet
+```

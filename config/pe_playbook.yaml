@@ -1,0 +1,54 @@
+# PE playbook — pesos, múltiplos, asunciones financieras del modelo arbitrage.
+# Toda economía del LBO simplificado vive aquí.
+
+# Múltiplos de compra escalonados por revenue (USD MM)
+buy_multiples_by_size:
+  - max_revenue: 5
+    multiple: 3.5
+  - max_revenue: 20
+    multiple: 4.5
+  - max_revenue: 50
+    multiple: 6.0
+  - max_revenue: 150
+    multiple: 8.0
+  - max_revenue: null   # null = sin tope (catch-all)
+    multiple: 9.0
+
+# Asunciones de salida
+exit_multiple_default: 9.0   # consolidado a $50M+ EBITDA
+ebitda_margin_default: 0.12   # textil mid-market MX
+hold_period_years: 5
+discount_rate: 0.12           # tasa de descuento corporativa Quimibond
+exchange_rate_mxn_usd: 20.0
+
+# Pesos del score combinado (deben sumar 1.0 — invariante valida esto)
+scoring_weights:
+  lever_cost: 0.35
+  lever_revenue: 0.30
+  lever_arbitrage: 0.35
+
+# Score por subsector (0-1) — input al lever cálculo
+subsector_priority_score:
+  Crítica: 1.00
+  Alta: 0.75
+  Media: 0.50
+  Baja: 0.25
+  Excluida: 0.00
+
+# Score por origen de capital (0-1) — input al lever cost (familiares = más palanca)
+capital_origin_score:
+  Familiar/MX: 1.00
+  Privado/MX: 0.80
+  Cooperativa: 0.60
+  Público: 0.30
+  Subsidiaria/Extranjera: 0.00
+  Desconocido: 0.50
+
+# Caps al score combinado por rol PE — evita que un STRATEGIC se vea atractivo
+role_combined_cap:
+  PLATFORM_CANDIDATE: 1.00
+  PRIMARY_BOLT_ON: 1.00
+  TUCK_IN: 0.85
+  STRATEGIC: 0.30        # subsidiarias extranjeras nunca son target
+  UNKNOWN_FIT: 0.50
+  OUT_OF_SCOPE: 0.10

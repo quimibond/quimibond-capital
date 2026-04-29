@@ -1,0 +1,68 @@
+# Clasificadores keyword-based — la única fuente de verdad de los matches.
+# Reglas:
+# - keywords son lowercased al matchar (el clasificador lower-case el texto).
+# - Match es substring. Acentos sí cuentan.
+# - Orden de evaluación: critica > alta > media > baja. Primer match gana.
+# - Si nada matchea: subsector = "Textil — otro", priority = "Media".
+
+subsectors:
+  Crítica:
+    no_tejidos:
+      keywords: [nonwoven, no tejid, "no-tejid", spunbond, meltblown, spunlace, needlepunch, geotextil]
+    textil_automotriz:
+      keywords: ["automotive interior", "automotive textile", autopartes textil, interior automotriz, headliner, airbag, seat belt, cinturón de seguridad]
+    recubrimientos_simil_cuero:
+      keywords: [simil cuero, "símil cuero", recubrimiento, coated fabric, vinílico, vinilica, faux leather, pvc coating, polyurethane coating, "pu coating"]
+    textil_integrado:
+      keywords: ["textil integrado", "integral textile", vertical textile]
+    proceso_quimibond:
+      # Matchea si el texto trae cualquiera de los procesos core de Quimibond
+      keywords: [tejido circular, tejido de punto, tintorer, dyeing, acabado textil, finishing, "circular knit", "knit dyeing"]
+
+  Alta:
+    textil_tecnico_industrial:
+      keywords: ["textil técnico", "textil tecnico", "technical textile", industrial fabric, geotextile, filtration fabric]
+    textil_medico_higiene:
+      keywords: [médico, medico, higien, hygien, pañal, panal, sanitar, "wound care", surgical, gauze, "non-woven medical"]
+    alfombras_floor_mats:
+      keywords: [alfombr, tapete, "floor mat", carpet, "automotive carpet"]
+    filtracion:
+      keywords: ["filtration", filtrac, filter media, "air filter", "liquid filter"]
+    hilados_tecnicos:
+      keywords: ["technical yarn", hilado técnico, hilado tecnico, "synthetic yarn", aramid, kevlar, polyester yarn, nylon yarn]
+
+  Media:
+    telas_generales:
+      keywords: [telas, weaving, knitting, fabric, hilado]
+    hogar:
+      keywords: [hogar, home textile, "bed linen", "table linen", blanco, sábana, sabana, toalla]
+
+  Baja:
+    confeccion_basica:
+      keywords: ["t-shirt", uniformes, workwear]
+
+# Procesos core de Quimibond (operación ancla en Toluca)
+quimibond_processes:
+  tejido_circular:
+    keywords: ["tejido circular", "circular knit", "circular knitting", "single jersey", "double jersey"]
+  tejido_punto:
+    keywords: ["tejido de punto", "tejido punto", "knit fabric", "warp knit"]
+  tintoreria:
+    keywords: [tintorer, dyeing, "fabric dyeing", "yarn dyeing", "piece dyeing"]
+  acabado:
+    keywords: [acabado, finishing, "fabric finishing", calandrado, calenderring]
+  recubrimiento:
+    keywords: [recubrimiento, coating, laminating, laminado]
+
+# Cliente B2B típico (input a Classification.main_client_type)
+client_types:
+  Automotriz:
+    keywords: [automotr, automotive, "tier 1", "tier 2", oem, ford, gm, stellantis, nissan, lear, shawmut, faurecia, magna]
+  Industrial:
+    keywords: [industrial, "oil & gas", construction, geotextil, filtration, "industrial fabric"]
+  Hogar:
+    keywords: [hogar, retail, consumer, bedding, blanco, sábana, sabana, "home textile"]
+  Médico/Higiene:
+    keywords: [hospital, médico, medico, hygien, "personal care", pañal, panal, "wound care"]
+  Apparel:
+    keywords: [apparel, prendas, ropa, "fashion brand"]

@@ -1,0 +1,28 @@
+# Familias textiles mexicanas clásicas — usado para detectar control familiar
+# en shareholders/executives parsing.
+#
+# Match: substring case-insensitive sobre apellidos en shareholders_text.
+# Si dos o más miembros de la misma familia aparecen, se considera "familiar/MX confirmado".
+
+families:
+  - Kalach
+  - Zaga
+  - Romano
+  - Bessudo
+  - Saba
+  - Kanan
+  - Cassab
+  - Cohen Levy
+  - Levy Saad
+  - Mizrahi
+  - Sasson
+  - Esses
+  - Forcelledo
+  - Mercado Lamm
+  - Lichtle
+  - Escalera
+  - Quintana
+  - Torre
+  - Kuri Chapur
+  - Troice
+  - Murga
