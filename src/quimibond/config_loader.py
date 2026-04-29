@@ -179,9 +179,28 @@ class PEPlaybook(BaseModel):
 
 
 class KeywordRule(BaseModel):
+    """
+    Regla de match por keywords y/o por NAICS prefix.
+
+    El clasificador considera la regla satisfecha si CUALQUIERA matchea:
+    - alguna `keyword` aparece como substring (lowercased) en el texto, O
+    - el NAICS de la empresa empieza con alguno de los `naics_prefixes`.
+
+    Esto permite atrapar empresas cuya descripción texto es genérica pero
+    cuyo código SCIAN ya las identifica claramente (caso clásico: Quimibond
+    con NAICS 3149 = no tejidos).
+    """
+
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    keywords: tuple[str, ...]
+    keywords: tuple[str, ...] = ()
+    naics_prefixes: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def _at_least_one_signal(self) -> KeywordRule:
+        if not self.keywords and not self.naics_prefixes:
+            raise ValueError("KeywordRule requiere al menos una keyword o naics_prefix")
+        return self
 
 
 class SubsectorTier(BaseModel):

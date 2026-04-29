@@ -15,6 +15,7 @@ from quimibond.models import RawCompany
 def _make_raw(
     activity: str | None = None,
     extra: dict[str, Any] | None = None,
+    naics: str | None = None,
 ) -> RawCompany:
     return RawCompany(
         source_id="X1",
@@ -22,6 +23,7 @@ def _make_raw(
         source_as_of=date(2026, 4, 29),
         company_name="Test Co",
         activity_description=activity,
+        naics=naics,
         extra=extra or {},
     )
 
@@ -104,3 +106,101 @@ def test_priority_param(config: Config, activity: str, expected_priority: str) -
     raw = _make_raw(activity)
     _, prio = classify_subsector(raw, config.classifiers)
     assert prio == expected_priority
+
+
+# ---------------------------------------------------------------------------
+# NAICS-aware classification (F3.5)
+# ---------------------------------------------------------------------------
+
+
+class TestNaicsAwareSubsector:
+    """
+    Cuando la descripción es genérica pero el NAICS es específico, debe
+    matchear por NAICS. Caso real: Quimibond.
+    """
+
+    def test_quimibond_naics_3149_critica(self, config: Config) -> None:
+        """Producción genérica + NAICS 3149 → no_tejidos Crítica."""
+        raw = _make_raw(activity="Manufactura de telas técnicas", naics="3149")
+        sector, prio = classify_subsector(raw, config.classifiers)
+        assert sector == "no_tejidos"
+        assert prio == "Crítica"
+
+    def test_naics_31499_specific_match(self, config: Config) -> None:
+        raw = _make_raw(activity=None, naics="314999")
+        sector, prio = classify_subsector(raw, config.classifiers)
+        assert sector == "no_tejidos"
+        assert prio == "Crítica"
+
+    def test_naics_31332_recubrimientos(self, config: Config) -> None:
+        raw = _make_raw(activity="Manufactura general", naics="31332")
+        sector, prio = classify_subsector(raw, config.classifiers)
+        assert sector == "recubrimientos_simil_cuero"
+        assert prio == "Crítica"
+
+    def test_naics_31331_proceso_quimibond(self, config: Config) -> None:
+        raw = _make_raw(activity=None, naics="31331")
+        sector, prio = classify_subsector(raw, config.classifiers)
+        assert sector == "proceso_quimibond"
+        assert prio == "Crítica"
+
+    def test_naics_31411_alfombras(self, config: Config) -> None:
+        raw = _make_raw(activity="Producción de productos textiles", naics="31411")
+        sector, prio = classify_subsector(raw, config.classifiers)
+        assert sector == "alfombras_floor_mats"
+        assert prio == "Alta"
+
+    def test_naics_3132_telas_media(self, config: Config) -> None:
+        raw = _make_raw(activity=None, naics="31321")
+        sector, prio = classify_subsector(raw, config.classifiers)
+        assert sector == "telas_generales"
+        assert prio == "Media"
+
+    def test_keyword_in_critica_beats_naics_in_media(self, config: Config) -> None:
+        """
+        Si una empresa tiene NAICS 3132 (telas — Media) PERO descripción
+        contiene 'spunbond' (no_tejidos — Crítica), gana Crítica porque se
+        evalúa primero ese tier.
+        """
+        raw = _make_raw(activity="Spunbond for technical use", naics="31321")
+        sector, prio = classify_subsector(raw, config.classifiers)
+        assert sector == "no_tejidos"
+        assert prio == "Crítica"
+
+    def test_no_haystack_no_naics_default(self, config: Config) -> None:
+        raw = _make_raw(activity=None, naics=None)
+        sector, prio = classify_subsector(raw, config.classifiers)
+        assert sector == "Textil — otro"
+        assert prio == "Media"
+
+
+class TestNameAsHaystack:
+    """company_name y legal_name también participan en el match — caso Quimibond."""
+
+    def test_company_name_keyword_match(self, config: Config) -> None:
+        """Productora de No Tejidos Quimibond: el nombre legal trae 'no tejid'."""
+        raw = RawCompany(
+            source_id="X1",
+            source="EMIS",
+            source_as_of=date(2026, 4, 29),
+            company_name="Productora de No Tejidos Quimibond",
+            naics="3132",  # NAICS dice fabric mills (Media)
+            activity_description="Manufactura de telas técnicas",
+        )
+        sector, prio = classify_subsector(raw, config.classifiers)
+        assert sector == "no_tejidos"
+        assert prio == "Crítica"
+
+    def test_legal_name_keyword_match(self, config: Config) -> None:
+        raw = RawCompany(
+            source_id="X1",
+            source="EMIS",
+            source_as_of=date(2026, 4, 29),
+            company_name="Acme Holdings",
+            legal_name="Acme Spunbond Industries S.A. de C.V.",
+            naics="3132",
+            activity_description=None,
+        )
+        sector, prio = classify_subsector(raw, config.classifiers)
+        assert sector == "no_tejidos"
+        assert prio == "Crítica"

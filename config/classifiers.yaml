@@ -9,23 +9,35 @@ subsectors:
   Crítica:
     no_tejidos:
       keywords: [nonwoven, no tejid, "no-tejid", spunbond, meltblown, spunlace, needlepunch, geotextil]
+      # NAICS 3149 = Other Textile Product Mills (incluye no tejidos);
+      # 31499 = All Other Miscellaneous Textile Product Mills (incl. nonwoven specialties).
+      # Quimibond cae aquí por NAICS aunque su descripción no traiga keyword.
+      naics_prefixes: ["3149"]
     textil_automotriz:
       keywords: ["automotive interior", "automotive textile", autopartes textil, interior automotriz, headliner, airbag, seat belt, cinturón de seguridad]
     recubrimientos_simil_cuero:
       keywords: [simil cuero, "símil cuero", recubrimiento, coated fabric, vinílico, vinilica, faux leather, pvc coating, polyurethane coating, "pu coating"]
+      # 31332 = Fabric Coating Mills; 3169 = Other Leather and Allied Product (incl. símil cuero).
+      naics_prefixes: ["31332", "3169"]
     textil_integrado:
       keywords: ["textil integrado", "integral textile", vertical textile]
     proceso_quimibond:
       # Matchea si el texto trae cualquiera de los procesos core de Quimibond
       keywords: [tejido circular, tejido de punto, tintorer, dyeing, acabado textil, finishing, "circular knit", "knit dyeing"]
+      # 31331 = Textile and Fabric Finishing Mills (acabado/tintorería).
+      naics_prefixes: ["31331"]
 
   Alta:
     textil_tecnico_industrial:
       keywords: ["textil técnico", "textil tecnico", "technical textile", industrial fabric, geotextile, filtration fabric]
+      # 31323 = Nonwoven Fabric Mills (pero ya cubierto por 3149); 31491 = Rope, Cordage, Twine, Tire Cord and Tire Fabric Mills.
+      naics_prefixes: ["31491"]
     textil_medico_higiene:
       keywords: [médico, medico, higien, hygien, pañal, panal, sanitar, "wound care", surgical, gauze, "non-woven medical"]
     alfombras_floor_mats:
       keywords: [alfombr, tapete, "floor mat", carpet, "automotive carpet"]
+      # 3141 = Textile Furnishings Mills (alfombras + linens), 31411 = Carpet and Rug Mills.
+      naics_prefixes: ["31411"]
     filtracion:
       keywords: ["filtration", filtrac, filter media, "air filter", "liquid filter"]
     hilados_tecnicos:
@@ -34,12 +46,18 @@ subsectors:
   Media:
     telas_generales:
       keywords: [telas, weaving, knitting, fabric, hilado]
+      # 3132 = Fabric Mills (broadwoven, knit, narrow), 3131 = Fiber/Yarn/Thread Mills.
+      naics_prefixes: ["3131", "3132"]
     hogar:
       keywords: [hogar, home textile, "bed linen", "table linen", blanco, sábana, sabana, toalla]
+      # 31412 = Curtain and Linen Mills.
+      naics_prefixes: ["31412"]
 
   Baja:
     confeccion_basica:
       keywords: ["t-shirt", uniformes, workwear]
+      # 315 = Apparel Manufacturing (excluido del pipeline pero por si entra).
+      naics_prefixes: ["315"]
 
 # Procesos core de Quimibond (operación ancla en Toluca)
 quimibond_processes:
