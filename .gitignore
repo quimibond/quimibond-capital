@@ -1,0 +1,31 @@
+# Secretos
+.env
+.env.local
+
+# Datos generados (CLAUDE.md: nunca commitear)
+data/raw/
+data/clean/
+output/*.xlsx
+output/*.csv
+!output/.gitkeep
+!data/.gitkeep
+
+# Workbook estratégico de Quimibond (jamás)
+*Pipeline_MA_Textil_Mexico_Quimibond*.xlsx
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Editores
+.vscode/
+.idea/
+*.swp

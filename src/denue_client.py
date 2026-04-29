@@ -58,7 +58,12 @@ class DenueClient:
     # Helpers HTTP
     # ----------------------------------------------------------
     def _get(self, url: str) -> list[dict] | dict | None:
-        """GET con reintentos. Devuelve JSON parseado o None si falla."""
+        """GET con reintentos. Devuelve JSON parseado o None si falla.
+
+        Nota DENUE: cuando una combinación de filtros no tiene resultados,
+        el endpoint responde HTTP 502 de forma persistente (no devuelve []).
+        Tratamos 502 como respuesta vacía y no reintentamos.
+        """
         last_err = None
         for attempt in range(1, self.max_retries + 1):
             try:
@@ -70,6 +75,9 @@ class DenueClient:
                     return r.json()
                 if r.status_code == 401:
                     raise PermissionError("Token inválido o expirado.")
+                if r.status_code == 502:
+                    # Comportamiento conocido de DENUE: combinación sin datos.
+                    return []
                 logger.warning(
                     "DENUE %s status=%d intento=%d", url, r.status_code, attempt
                 )
@@ -88,8 +96,8 @@ class DenueClient:
         Test rápido del token. Hace una búsqueda mínima.
         Devuelve True si la API responde con éxito.
         """
-        # Búsqueda trivial: condición=textil, entidad=09 (CDMX), 1-1
-        url = f"{self.base_url}/Buscar/textil/09/1/1/{self.token}"
+        # BuscarEntidad: condicion=textil, entidad=09 (CDMX), registros 1-1
+        url = f"{self.base_url}/BuscarEntidad/textil/09/1/1/{self.token}"
         result = self._get(url)
         return result is not None
 
@@ -102,10 +110,10 @@ class DenueClient:
         registro_final: int = 1000,
     ) -> list[dict]:
         """
-        Busca establecimientos filtrando por NAICS (sector_scian), entidad y estrato.
+        Busca establecimientos filtrando por NAICS (rama SCIAN), entidad y estrato.
 
         Args:
-            naics: código sector SCIAN/NAICS (ej. "3149")
+            naics: código de rama SCIAN/NAICS de 4 dígitos (ej. "3149")
             entidad: clave entidad federativa (ej. "15" para EdoMex)
             estrato: código de estrato (ej. "5" para 51-100 empleados)
             registro_inicial / registro_final: paginación (DENUE limita a 5000 por query)
@@ -113,13 +121,13 @@ class DenueClient:
         Returns:
             Lista de dicts con establecimientos. Vacía si no hay resultados.
         """
-        # Endpoint BuscarAreaActEstr
-        # Formato: /entidad/municipio/localidad/ageb/manzana/sector/inicio/fin/estrato/token
-        # 0 en municipio/localidad/ageb/manzana significa "todos"
+        # Endpoint BuscarAreaActEstr (firma actual, 15 segmentos):
+        # /entidad/municipio/localidad/ageb/manzana/sector/subsector/rama/clase/nombre/inicio/fin/id/estrato/token
+        # 0 en cualquier filtro = "todos". Pasamos el NAICS de 4 dígitos como rama.
         url = (
             f"{self.base_url}/BuscarAreaActEstr/"
-            f"{entidad}/0/0/0/0/{naics}/"
-            f"{registro_inicial}/{registro_final}/{estrato}/{self.token}"
+            f"{entidad}/0/0/0/0/0/0/{naics}/0/0/"
+            f"{registro_inicial}/{registro_final}/0/{estrato}/{self.token}"
         )
         logger.debug("DENUE query: %s", url.replace(self.token, "***"))
         result = self._get(url)

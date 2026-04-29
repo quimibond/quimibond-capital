@@ -47,7 +47,22 @@ def normalizar_texto(texto: str | None) -> str:
 
 
 def construir_ubicacion(row: pd.Series) -> str:
-    """Construye 'Municipio, Entidad' a partir de campos DENUE."""
+    """Construye 'Municipio, Entidad' a partir de campos DENUE.
+
+    El endpoint actual devuelve un único campo `Ubicacion` con formato
+    "LOCALIDAD, Municipio, ESTADO" (con espacios sobrantes). Lo parseamos
+    si está disponible; si no, caemos a campos sueltos heredados.
+    """
+    ubic = row.get("Ubicacion") or row.get("ubicacion")
+    if ubic and isinstance(ubic, str):
+        partes = [p.strip() for p in ubic.split(",") if p.strip()]
+        if len(partes) >= 2:
+            municipio = normalizar_texto(partes[-2])
+            entidad = normalizar_texto(partes[-1])
+            return f"{municipio}, {entidad}" if municipio and entidad else (municipio or entidad)
+        if len(partes) == 1:
+            return normalizar_texto(partes[0])
+
     municipio = normalizar_texto(row.get("municipio") or row.get("nom_mun"))
     entidad = normalizar_texto(row.get("entidad") or row.get("nom_ent"))
     if municipio and entidad:
@@ -211,13 +226,18 @@ def transformar(df_raw: pd.DataFrame) -> pd.DataFrame:
             "Fuente": f"DENUE {pd.Timestamp.now().strftime('%Y-%m')}",
             "Notas": notas,
             "Status": "Investigar",
-            "RFC": r.get("rfc") or "",
-            "Teléfono": r.get("telefono") or "",
-            "Email": r.get("correo_e") or r.get("correo_electronico") or "",
-            "Web": r.get("sitio_internet") or r.get("www") or "",
+            "RFC": r.get("rfc") or r.get("RFC") or "",
+            "Teléfono": r.get("telefono") or r.get("Telefono") or "",
+            "Email": (
+                r.get("correo_e")
+                or r.get("Correo_e")
+                or r.get("correo_electronico")
+                or ""
+            ),
+            "Web": r.get("sitio_internet") or r.get("Sitio_internet") or r.get("www") or "",
             "Latitud": r.get("latitud") or r.get("Latitud") or "",
             "Longitud": r.get("longitud") or r.get("Longitud") or "",
-            "Fecha alta": r.get("fecha_alta") or "",
+            "Fecha alta": r.get("fecha_alta") or r.get("Fecha_Alta") or "",
             "NAICS": naics_query,
             # Veritrade (vacíos)
             "Vol Exp 24m kg": None,
