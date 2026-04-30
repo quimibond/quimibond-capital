@@ -15,6 +15,11 @@ from quimibond.output.helpers import (
     write_title,
 )
 from quimibond.output.styles import StyleSet, role_fill, score_heatmap_fill
+from quimibond.traceability import (
+    apply_lineage_to_cell,
+    lineage_for_lever_combined,
+    lineage_for_role,
+)
 
 # Solo mostramos los roles operacionales en orden lógico de prioridad
 PRIORITY_ROLES: tuple[PERoleType, ...] = (
@@ -146,8 +151,11 @@ class PipelinePESheet:
         combined_cell = ws.cell(row=row, column=col, value=c.levers.combined)
         combined_cell.style = styles.score
         combined_cell.fill = score_heatmap_fill(c.levers.combined)
+        apply_lineage_to_cell(combined_cell, lineage_for_lever_combined(c))
         col += 1
 
-        ws.cell(row=row, column=col, value=c.pe_role_justification).style = styles.body
-        # Recoloreo del rol via celda 5 (Priority) -> en su lugar pintamos rank cell
+        just_cell = ws.cell(row=row, column=col, value=c.pe_role_justification)
+        just_cell.style = styles.body
+        apply_lineage_to_cell(just_cell, lineage_for_role(c))
+        # Tinte de fila por rol PE (en celda Rank, primera columna)
         ws.cell(row=row, column=1).fill = role_fill(c.pe_role)

@@ -123,12 +123,18 @@ data/                            # gitignored
 
 | Fase | Estado | Qué entrega |
 |------|--------|-------------|
-| **F1** | ✅ Completada | Scaffolding, models, config YAMLs, CLI stub, tests + mypy strict pasando. |
-| **F2** | Pendiente | `ingestion/emis.py` + tests con fixture. Requiere export1 de EMIS pusheado. |
-| **F3** | Pendiente | `enrichment/*.py` (normalizers, shareholders, subsector, processes, clients). |
-| **F4** | Pendiente | `pe_classification/*.py` + `validation/invariants.py`. |
-| **F5** | Pendiente | `output/workbook.py` + las 11 hojas. |
-| **F6** | Pendiente | `traceability/lineage.py`, recalc helper, README/CLAUDE.md finales. |
+| **F1** | ✅ | Scaffolding, models, config YAMLs, CLI stub, tests + mypy strict pasando. |
+| **F2** | ✅ | `ingestion/emis.py` + parsers + tests con fixture (698 empresas validadas). |
+| **F3** | ✅ | `enrichment/*.py` (normalizers, shareholders, subsector NAICS-aware, processes, clients). |
+| **F4** | ✅ | `pe_classification/*.py` + `validation/invariants.py` + integration e2e. |
+| **F5** | ✅ | `output/workbook.py` + las 11 hojas + CLI conectado. |
+| **F6** | ✅ | `traceability/lineage.py` (cell comments), `scripts/recalc.py`, READMEs finales. |
+
+Sistema funcional end-to-end. Próximas fases sugeridas (no priorizadas):
+- **F7:** ingestion DENUE + consolidación cross-source (los nombres y RFCs
+  de DENUE complementan EMIS para empresas chicas que EMIS no cubre).
+- **F8:** Veritrade (comercio exterior) para validar exporters.
+- **F9:** Statista/Euromonitor para tamaño de mercado y growth en memo.
 
 Cada fase pasa pytest + mypy strict antes de la siguiente. Commits atómicos
 por fase con prefijo `F<n>:` en el mensaje.

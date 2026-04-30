@@ -15,6 +15,11 @@ from quimibond.output.helpers import (
     write_title,
 )
 from quimibond.output.styles import StyleSet, score_heatmap_fill
+from quimibond.traceability import (
+    apply_lineage_to_cell,
+    lineage_for_lever_axis,
+    lineage_for_lever_combined,
+)
 
 # Roles operacionales (excluye STRATEGIC y OUT_OF_SCOPE).
 INCLUDED_ROLES = ("PLATFORM_CANDIDATE", "PRIMARY_BOLT_ON", "TUCK_IN")
@@ -77,6 +82,10 @@ class TresPalancasSheet:
             cost_cell = ws.cell(row=row, column=col, value=c.levers.cost)
             cost_cell.style = styles.score
             cost_cell.fill = score_heatmap_fill(c.levers.cost)
+            apply_lineage_to_cell(
+                cost_cell,
+                lineage_for_lever_axis("cost", c.levers.cost, c.levers.cost_justification),
+            )
             col += 1
             ws.cell(row=row, column=col, value=c.levers.cost_justification).style = styles.body
             col += 1
@@ -84,6 +93,10 @@ class TresPalancasSheet:
             rev_cell = ws.cell(row=row, column=col, value=c.levers.revenue)
             rev_cell.style = styles.score
             rev_cell.fill = score_heatmap_fill(c.levers.revenue)
+            apply_lineage_to_cell(
+                rev_cell,
+                lineage_for_lever_axis("revenue", c.levers.revenue, c.levers.revenue_justification),
+            )
             col += 1
             ws.cell(row=row, column=col, value=c.levers.revenue_justification).style = styles.body
             col += 1
@@ -91,6 +104,10 @@ class TresPalancasSheet:
             arb_cell = ws.cell(row=row, column=col, value=c.levers.arbitrage)
             arb_cell.style = styles.score
             arb_cell.fill = score_heatmap_fill(c.levers.arbitrage)
+            apply_lineage_to_cell(
+                arb_cell,
+                lineage_for_lever_axis("arbitrage", c.levers.arbitrage, c.levers.arbitrage_justification),
+            )
             col += 1
             ws.cell(row=row, column=col, value=c.levers.arbitrage_justification).style = styles.body
             col += 1
@@ -98,6 +115,7 @@ class TresPalancasSheet:
             comb_cell = ws.cell(row=row, column=col, value=c.levers.combined)
             comb_cell.style = styles.score
             comb_cell.fill = score_heatmap_fill(c.levers.combined)
+            apply_lineage_to_cell(comb_cell, lineage_for_lever_combined(c))
 
             ws.row_dimensions[row].height = 50
             row += 1
