@@ -1,14 +1,14 @@
 """
 CLI de Quimibond Capital pipeline.
 
-Subcomandos (todos stub salvo `config show/validate` en F1):
+Subcomandos:
 
     quimibond pipeline run        — orquesta ingestion → enrichment → classify → workbook
-    quimibond enrich              — solo enriquecimiento
-    quimibond classify            — solo clasificación PE
-    quimibond workbook            — solo workbook
-    quimibond validate            — corre invariantes
-    quimibond inspect             — detalle de una empresa por id
+    quimibond enrich              — solo enriquecimiento (futuro)
+    quimibond classify            — solo clasificación PE (futuro)
+    quimibond workbook            — solo workbook (asume input ya clasificado)
+    quimibond validate            — corre invariantes (futuro)
+    quimibond inspect             — detalle de una empresa por id (futuro)
     quimibond config show         — muestra config cargada
     quimibond config validate     — valida YAMLs sin correr nada más
 """
@@ -16,6 +16,7 @@ Subcomandos (todos stub salvo `config show/validate` en F1):
 from __future__ import annotations
 
 import json
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +24,11 @@ import click
 import structlog
 
 from quimibond.config_loader import Config, load_config
+from quimibond.ingestion import EmisLoader
 from quimibond.logging_setup import configure_logging
+from quimibond.output import generate_workbook
+from quimibond.pe_classification import classify_universe
+from quimibond.validation import InvariantViolation
 
 DEFAULT_CONFIG_DIR = Path("config")
 log = structlog.get_logger()
@@ -75,14 +80,40 @@ def pipeline() -> None:
 
 @pipeline.command("run")
 @click.option("--input", "input_path", type=click.Path(exists=True, path_type=Path), required=True)
-@click.option("--output", "output_dir", type=click.Path(path_type=Path), default=Path("data/processed"))
+@click.option("--output-dir", type=click.Path(path_type=Path), default=Path("data/processed"))
 @click.option("--config-dir", type=click.Path(exists=True, path_type=Path), default=DEFAULT_CONFIG_DIR)
-def pipeline_run(input_path: Path, output_dir: Path, config_dir: Path) -> None:
+@click.option("--source-as-of", type=click.DateTime(formats=["%Y-%m-%d"]), default=None,
+              help="Fecha del snapshot del input (default: hoy).")
+def pipeline_run(
+    input_path: Path,
+    output_dir: Path,
+    config_dir: Path,
+    source_as_of: datetime | None,
+) -> None:
     """Pipeline completo: ingest → enrich → classify → validate → workbook."""
     config = _load_or_die(config_dir)
-    log.info("pipeline.start", input=str(input_path), output=str(output_dir),
-             config_companies=config.thresholds.revenue_brackets_usd_mm.platform_min)
-    raise click.exceptions.UsageError("F1: pipeline run no implementado todavía (llega en F5).")
+    today = date.today()
+    snapshot_date = source_as_of.date() if source_as_of else today
+
+    log.info(
+        "pipeline.start",
+        input=str(input_path),
+        output_dir=str(output_dir),
+        snapshot=snapshot_date.isoformat(),
+    )
+
+    raws = EmisLoader().load(input_path, source_as_of=snapshot_date)
+    data = classify_universe(raws, config, today=today)
+
+    output_path = output_dir / f"Quimibond_Capital_PE_Pipeline_{today.isoformat()}.xlsx"
+    try:
+        generate_workbook(data, config, output_path)
+    except InvariantViolation as exc:
+        click.echo(f"ERROR: invariante violada — {exc}", err=True)
+        raise click.exceptions.Exit(1) from exc
+
+    click.echo(f"✓ Workbook generado: {output_path}")
+    click.echo(f"  Empresas: {data.n_companies} · Subsectores: {len(data.saturation)}")
 
 
 # ---------------------------------------------------------------------------
@@ -111,13 +142,30 @@ def classify(input_path: Path, output_path: Path, config_dir: Path) -> None:
 
 
 @cli.command()
-@click.option("--input", "input_path", type=click.Path(exists=True, path_type=Path), required=True)
+@click.option("--input", "input_path", type=click.Path(exists=True, path_type=Path), required=True,
+              help="EMIS xlsx (carga + clasifica + genera workbook en un paso).")
 @click.option("--output", "output_path", type=click.Path(path_type=Path), required=True)
 @click.option("--config-dir", type=click.Path(exists=True, path_type=Path), default=DEFAULT_CONFIG_DIR)
-def workbook(input_path: Path, output_path: Path, config_dir: Path) -> None:
-    """Solo generación del workbook (asume clasificación previa)."""
-    _load_or_die(config_dir)
-    raise click.exceptions.UsageError("F1: workbook no implementado (llega en F5).")
+@click.option("--source-as-of", type=click.DateTime(formats=["%Y-%m-%d"]), default=None)
+def workbook(
+    input_path: Path,
+    output_path: Path,
+    config_dir: Path,
+    source_as_of: datetime | None,
+) -> None:
+    """Genera el workbook desde un EMIS xlsx (one-shot)."""
+    config = _load_or_die(config_dir)
+    today = date.today()
+    snapshot_date = source_as_of.date() if source_as_of else today
+
+    raws = EmisLoader().load(input_path, source_as_of=snapshot_date)
+    data = classify_universe(raws, config, today=today)
+    try:
+        generate_workbook(data, config, output_path)
+    except InvariantViolation as exc:
+        click.echo(f"ERROR: invariante violada — {exc}", err=True)
+        raise click.exceptions.Exit(1) from exc
+    click.echo(f"✓ Workbook generado: {output_path}")
 
 
 @cli.command()
